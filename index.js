@@ -1,5 +1,7 @@
+var day;
 $(function(){
-	var users = new UsersCollection([
+	var userDayCollection = new UsersDaysCollection(),
+        usersCollection = new UsersCollection([
 		{
 			name: "testUser 1"
 		},
@@ -7,11 +9,14 @@ $(function(){
 			name: "testUser 2"
 		}
 	]),
-	user = users.getUserByName('testUser 1'),
-	userDay = new UsersDaysCollection();
+	user = usersCollection.getUserByName('testUser 1');
+
 	if(user)
-		user.addUserDay(new Date());
-	console.log(user);
-	//user.setBusyTime('12:30','13:00');
-	console.log(userDay.getDaysByWeek(5));
+	    user.addUserDay(userDayCollection, new Date());
+
+
+    day = userDayCollection.getDaysByDay(17);
+    console.log(day);
+    day[0].setBusyTime("00:30","04:30");
+    day[0].setFreeTime("02:30","03:00");
 });
