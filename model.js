@@ -5,7 +5,7 @@
 
 var UserDayModel = Backbone.Model.extend({
 
-    default:{
+    defaults:{
         id:0,               //идентификатор дня
         timeMask:0,         //маска занятого времени
 		accId:0,            //идентификатор аккаунта которому пренадлежит день
@@ -250,10 +250,16 @@ var UserDayModel = Backbone.Model.extend({
 
 var ConferenceModel = Backbone.Model.extend({
 
-    default:{
+    defaults:{
+        id:0,
+        ownerId:0,
+        name:'',
+        status:'',
+        data:{},
 		timeMask:0,
-		name:"",
-		id:0
+        invited:[],
+        description:'',
+        files:[]
 	},
 
 	
@@ -265,63 +271,15 @@ var ConferenceModel = Backbone.Model.extend({
 
 var UserModel = Backbone.Model.extend({
 
-    default:{
-		id:0,                   //идентификатор пользователя
-		name:""                 //имя пользователя
+    defaults:{
+		id:0,                    //идентификатор пользователя
+		name:'',                 //имя пользователя
+        email:'',                //email пользователя
+        passHash:''              //хэш пароля
 	},
 	
 	initialize: function(){
 		this.id = this.cid; //пока нет нормальных идентификаторов
-	},
-
-    /**
-     * Добавляет день в переданнйю коллексцию с добавлением идентификатора пользователя в этот день
-     * @param collection - коллекция для добавления в нее дня
-     * @param data - js объект дня который надо добавить
-     *
-     * @return {Object} -  объек вида:
-     *                     {
-     *                          errorCode - код ошибки (0 если все хорошо)
-     *                          value - результат выполнения, либо пустая строка, либо текст ошибки
-     *                     }
-     */
-	addUserDay: function(collection, data){
-        var res = {                                             //возвращаемый объект
-            errorCode:0,                                        //код ошибки
-            value:''                                            //значение результата
-        }
-
-                                                                //если все необходимые данные есть
-        if(collection != null && typeof collection == 'object' && data != null && typeof data == 'object'){
-            var day = data.getDate(),                           //получаем день
-                month = data.getMonth(),                        //получаем номер месяца (0-январь)
-                year = data.getUTCFullYear(),                   //получаем полную дату вида "ГГГГ"
-
-                                                                //добавляем в переданную коллекцию день с
-                                                                //ранее вычесленными параметрами
-            addRes = collection._addUserDay({
-                accId : this.id,                                //идентификатор пользователя к которому добавляется день
-                timeMask:0,                                     //маска занятого времени
-                day: day,                                       //вычесленный день
-                month: month,                                   //вычесленный месяц
-                year: year,                                     //вычесленный год
-                week:getWeeksNum(year, month),                  //вычесняем номер недели начиная с начала года
-                conferenceList:[]                               //пустой список идентификаторов конференций на этот день
-            });
-            if(addRes.errorCode != 0){                          //добавление вернуло ошибку
-                res = {                                         //собираем объект с кодом ошибки 2
-                    errorCode: 2,
-                    value: addRes.value
-                };
-            }
-        }else{                                                  //если переданные параметры не валидны
-            res = {                                             //собираем объект с кодом ошибки 1
-                errorCode: 1,
-                value: 'Invalid input parameter'
-            }
-        }
-
-        return res;                                             //возвращаем результат выполнения функции
 	}
 });
 
@@ -362,7 +320,7 @@ var UsersDaysCollection = Backbone.Collection.extend({
                                                 //если переданный данные есть и это объект
         if(obj != null && typeof obj == 'object'){
                                                 //если переданный объект содержит хотябы одно валидное поля для поиска
-            if (obj['day'] || obj['week'] || obj['month'] || obj['year'] || obj['accId']){
+            if (isObjValid(this.model.prototype.defaults, obj)){
                 res.value = this.where(obj);   //ищим по данным из переданного объекта и записываем в опле value
             }else{                              //если переданный объект не содержит нужных параметров
                 res = {                         //собираем объект ошибки с  кодом 2
@@ -380,31 +338,48 @@ var UsersDaysCollection = Backbone.Collection.extend({
     },
 
     /**
-     * Добавляет день в колелкцию дней
-     * @param obj - объект вида UserDayModel
-     * @return {Object} - объек вида:
+     * Добавляет день в переданнйю коллексцию с добавлением идентификатора пользователя в этот день
+     * @param id - идентификатор пользователя для которого создается день
+     * @param data - js объект дня который надо добавить
+     *
+     * @return {Object} -  объек вида:
      *                     {
      *                          errorCode - код ошибки (0 если все хорошо)
-     *                          value - результат выполнения: либо текст ошибки, либо пустая строка если день добавлен без ошибок
+     *                          value - результат выполнения, либо созданный день, либо текст ошибки
      *                     }
-     * @private
      */
-    _addUserDay: function(obj){
-        var res = {                             //возвращаемый объект
-            errorCode:0,                        //код ошибки
-            value:''                            //значение результата
-        };
+    addUserDay: function(id, data){
+        var res = {                                         //возвращаемый объект
+            errorCode:0,                                    //код ошибки
+            value:''                                        //значение результата
+        }
 
-        if(obj != null && obj != undefined){    //если входной параметр есть
-            this.add(obj);                      //добавляем в коллекцию объект
-        }else{                                  //если переданный объект не валиден
-            res = {                             //собираем объект ошибки с  кодом 1
-                errorCode:1,
+                                                            //если все необходимые данные есть
+        if(id != null && id != undefined && data != null && typeof data == 'object'){
+            var day = data.getDate(),                       //получаем день
+                month = data.getMonth(),                    //получаем номер месяца (0-январь)
+                year = data.getUTCFullYear(),               //получаем полную дату вида "ГГГГ"
+                mod = new this.model({                      //создаем день на основе модели дня
+                    accId :id,                              //идентификатор пользователя к которому добавляется день
+                    timeMask:0,                             //маска занятого времени
+                    day: day,                               //вычесленный день
+                    month: month,                           //вычесленный месяц
+                    year: year,                             //вычесленный год
+                    week:getWeeksNum(year, month),          //вычесняем номер недели начиная с начала года
+                    conferenceList:[]                       //пустой список идентификаторов конференций на этот день
+                });
+
+            this.add(mod);                                  //добавляем в коллекцию день с ранее вычесленными параметрами
+            res.value = mod;                                //возвращаем созданный день
+
+        }else{                                              //если переданные параметры не валидны
+            res = {                                         //собираем объект с кодом ошибки 1
+                errorCode: 1,
                 value: 'Invalid input parameter'
             }
         }
 
-        return res;                             //возвращаем результат действия функции
+        return res;                                         //возвращаем результат выполнения функции
     }
 
 }); 
@@ -413,11 +388,93 @@ var ConferenceCollection = Backbone.Collection.extend({
 
     model: ConferenceModel
 
+
 });
 
 var UsersCollection = Backbone.Collection.extend({
 
     model: UserModel,
+
+    /**
+     * Создание пользователя
+     * @param obj - объект содержащий данные для создания пользователя, поля email и pass - обязательны
+     * @return {Object}-  объек вида:
+     *                     {
+     *                          errorCode - код ошибки (0 если все хорошо)
+     *                          value - результат выполнения, созданный пользователь, либо текст ошибки
+     *                     }
+     */
+    addUser: function(obj){
+        var res = {                                         //возвращаемый объект
+            errorCode:0,                                    //код ошибки
+            value:''                                        //значение результата
+        }
+
+        if(obj != null && typeof obj == 'object'){
+                                                            //если переданный объект содержит хотябы одно валидное
+                                                            //поле для создания пользователя
+            if (isObjValid({email:'',pass:''}, obj, true)){
+                if(this.getUserBy({email:obj.email}).value.length == 0){     //если пользователя с таким email еще нет
+                    obj.passHash = obj.pass;                //здеть надо применить кодирование
+                    var mod = new this.model(obj);          //создаем объект на основе модели
+                    this.add(mod);                          //создаем нового пользователя из созданного объекта
+                    res.value = mod;                        //возвращаем созданного пользователя
+                }else{
+                    res = {                                 //если пользователь с таким email уже есть
+                        errorCode: 3,
+                        value: 'User with such email exist'
+                    }
+                }
+            }else{                                          //если указаны не все нужные параметры
+                res = {
+                    errorCode: 2,
+                    value: 'Invalid option'
+                }
+            }
+        }else{                                              //если переданный параметр не валиден
+            res = {                                         //собираем объект с кодом ошибки 1
+                errorCode: 1,
+                value: 'Invalid input parameter'
+            }
+        }
+
+        return res;
+    },
+
+
+    /**
+     * Поиск пользователя по данным с которыми он логинится
+     * @param obj - объект содержащий данные для поиска, поля email и pass - обязательны
+     * @return {Object} -  объек вида:
+     *                     {
+     *                          errorCode - код ошибки (0 если все хорошо)
+     *                          value - результат выполнения, массив с пользователем, либо текст ошибки
+     *                     }
+     */
+    getUserByLoginDate: function(obj){
+        var res = {                                         //возвращаемый объект
+            errorCode:0,                                    //код ошибки
+            value:''                                        //значение результата
+        }
+        if(obj != null && typeof obj == 'object' ){
+            if(isObjValid({email:'',pass:''},obj, true)){   //проверяем наличие нужных параметров email и pass
+                obj.passHash = obj.pass;                    //здеть надо применить кодирование
+                res.value = this.where(obj);                //ищим пользователя
+            }else{                                          //если указаны не все нужные параметры
+                res = {
+                    errorCode: 2,
+                    value: 'Invalid option'
+                }
+            }
+        }else{                                              //если переданный параметр не валиден
+            res = {                                         //собираем объект с кодом ошибки 1
+                errorCode: 1,
+                value: 'Invalid input parameter'
+            }
+        }
+
+        return res;                                         //возвращаем результат выполнения функции
+    },
 
     /**
      * Поиск пользоватаелей по входным параметрам
@@ -441,10 +498,10 @@ var UsersCollection = Backbone.Collection.extend({
             errorCode:0,                        //код ошибки
             value:''                            //значение результата
         };
-
                                                 //если переданный параметр есть и это объект
         if(obj != null && typeof obj == 'object'){
-            if (obj['id'] || obj['name']){      //если переданный объект содержит хотябы одно валидное поля для поиска
+
+            if (isObjValid(this.model.prototype.defaults, obj)){      //если переданный объект содержит хотябы одно валидное поля для поиска
                 res.value = this.where(obj);
             }else{                              //если переданный объект не содержит поелй для поиска
                 res = {                         //собираем объект ошибки с  кодом 2
@@ -452,7 +509,6 @@ var UsersCollection = Backbone.Collection.extend({
                     value: 'Not enough or invalid options'
                 }
             }
-
         }else{                                  //если переданный параметр не валиден
             res = {                             //собираем объект ошибки с  кодом 1
                 errorCode:1,
