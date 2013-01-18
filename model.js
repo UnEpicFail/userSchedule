@@ -476,6 +476,40 @@ var UsersCollection = Backbone.Collection.extend({
         return res;                                         //возвращаем результат выполнения функции
     },
 
+    editUser: function(id,obj){
+        var res = {                                         //возвращаемый объект
+            errorCode:0,                                    //код ошибки
+            value:''                                        //значение результата
+        }
+        if(id != null && id != undefined){
+            if(obj != null && typeof obj == 'object'){
+                var user = this.get(id);
+                if(user){
+                    obj.id = id;
+                    user.set(obj);
+                    res.value = user;
+                }else{
+                    res = {
+                        errorCode:3,
+                        value: 'No user with such id'
+                    }
+                }
+            }else{
+                res = {
+                    errorCode:2,
+                    value: 'Invalid input obj'
+                }
+            }
+        }else{
+            res = {
+                errorCode:1,
+                value: 'Invalid id'
+            }
+        }
+
+        return res;                                         //возвращаем результат выполнения функции
+    },
+
     /**
      * Поиск пользоватаелей по входным параметрам
      * @param obj - бъект по которому будет осуществлятся поиск. Обязан содержать минимум один из критереив поиска:
